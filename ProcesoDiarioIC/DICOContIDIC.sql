@@ -1,0 +1,7 @@
+CREATE TABLE DICOContIDIC(
+	ID				INT			NULL,
+	Cuenta			VARCHAR(25)	NULL,
+	FechaContable	DATETIME	NULL,
+	Empresa			VARCHAR(5)	NULL,
+	Fecha			DATETIME	NULL
+)

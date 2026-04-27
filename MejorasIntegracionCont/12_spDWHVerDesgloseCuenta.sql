@@ -3,16 +3,12 @@ SET ANSI_NULLS OFF
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED
 SET LOCK_TIMEOUT -1
 SET QUOTED_IDENTIFIER OFF
-
-go
-
----PROCEDURE----
-/**************** spDWHVerDesgloseCuenta ****************/
-if exists (select * from sysobjects where id = object_id('spDWHVerDesgloseCuenta') and type = 'P') drop procedure spDWHVerDesgloseCuenta
 GO
-/*IGGR. 11/12/2024. El presente script tiene una modificacion para que cuando se onsulten aquellas cuentas corregidas con el proceo de correccion realizado por el quipo Intelisis
-* muestre correctamente los resultados dentro del explorador e integracion contable aquellas uentas no corregidas se seguiran mostrando con el proceso natural del 
-* explorador*/
+--EXEC spDWHVerDesgloseCuenta 'Contacto','210-100-000','02',NULL,2025,1,13,'Pesos','20250101'
+IF EXISTS(SELECT * FROM sysobjects WHERE TYPE='p' AND NAME='spDWHVerDesgloseCuenta')
+DROP PROCEDURE spDWHVerDesgloseCuenta
+GO
+
 CREATE PROCEDURE     spDWHVerDesgloseCuenta
 
 @Filtro 		VARCHAR(20),
@@ -23,7 +19,7 @@ CREATE PROCEDURE     spDWHVerDesgloseCuenta
 @PeriodoD		INT,
 @PeriodoA		INT,
 @Moneda			CHAR(20),
-@FechaSaldoInicial	datetime
+@FechaSaldoInicial	DATETIME
 AS
 BEGIN
 IF @Moneda	 IN ('','NULL','(Todas)','(Todos)', NULL) select @Moneda =  NULL
@@ -105,7 +101,7 @@ BEGIN
 					 LEFT OUTER JOIN MovReg m ON r.Modulo = m.Modulo AND r.ModuloID = m.ID AND r.Empresa = m.Empresa
 					 LEFT OUTER JOIN MovTipo mt ON     mt.mov = c.mov
 					 WHERE mt.modulo = 'CONT' AND
-					mt.clave = 'CONT.P' AND
+					mt.clave IN ('CONT.P','CONT.C') AND
 					c.Estatus = 'CONCLUIDO' AND
 					  r.Cuenta = @Cuenta AND r.empresa = @Empresa
 					AND ISNULL(c.Sucursal, '') = ISNULL(ISNULL(@Sucursal, c.Sucursal), '')
@@ -119,7 +115,7 @@ BEGIN
 					--GROUP BY ISNULL(ISNULL(r.ContactoEspecifico, c.Contacto),''), c.ContactoTipo
 					GROUP BY ISNULL(ISNULL(r.ContactoEspecifico, c.Contacto),''), ISNULL(ISNULL(m.Ctotipo, c.ContactoTipo),'')
 					HAVING SUM(ISNULL(r.Debe,0) - ISNULL(r.Haber,0)) <> 0
-		
+				
 		INSERT INTO #DWH (Contacto, CtoTipo, Debe, Haber, Proyecto, UEN, FechaEmision, CentroCostos, CuentaDinero)
 				SELECT
 				ISNULL(ISNULL(r.ContactoEspecifico, c.Contacto),''),
@@ -140,7 +136,7 @@ BEGIN
 				LEFT OUTER JOIN MovReg m ON r.Modulo = m.Modulo AND r.ModuloID = m.ID AND r.Empresa = m.Empresa
 				LEFT OUTER JOIN MovTipo mt ON     mt.mov = c.mov
 				WHERE  ISNULL(mt.modulo,'CONT') = 'CONT' AND
-				mt.clave = 'CONT.P' AND
+				mt.clave IN ('CONT.P','CONT.C') AND
 				c.Estatus = 'CONCLUIDO' AND
 				isnull(c.Moneda,'') = isnull(isnull(@Moneda, c.Moneda),'') AND
 				r.cuenta = @Cuenta AND r.empresa = @Empresa AND c.Ejercicio = @Ejercicio AND c.Periodo BETWEEN @PeriodoD AND @PeriodoA AND
@@ -186,7 +182,7 @@ BEGIN
 				LEFT OUTER JOIN MovReg m ON r.Modulo = m.Modulo AND r.ModuloID = m.ID AND r.Empresa = m.Empresa
 				LEFT OUTER JOIN MovTipo mt ON     mt.mov = c.mov
 				WHERE  mt.modulo = 'CONT' AND
-				mt.clave = 'CONT.P' AND
+				mt.clave IN ('CONT.P','CONT.C') AND
 				c.Estatus = 'CONCLUIDO' AND
 				isnull(c.Moneda,'') = isnull(isnull(@Moneda, c.Moneda),'') AND
 				r.cuenta = @Cuenta AND r.empresa = @Empresa AND c.Ejercicio = @Ejercicio AND c.Periodo BETWEEN @PeriodoD AND @PeriodoA AND
@@ -320,56 +316,122 @@ END
 ELSE
 IF @Filtro = 'UEN'
 BEGIN
-INSERT INTO #DWHSI(Contacto, CtoTipo, Proyecto, UEN, FechaEmision, CentroCostos, CuentaDinero, Saldo)
-SELECT
-'',
-'',
-'',
-ISNULL(m.UEN,0),
-'',
-'',
-'',
-SUM(ISNULL(r.Debe,0) - ISNULL(r.Haber,0))
-FROM ContReg r
-JOIN MovReg m ON r.Modulo = m.Modulo AND r.ModuloID = m.ID AND r.Empresa = m.Empresa
-JOIN Cont c ON c.ID = r.ID AND ISNULL(c.OrigenTipo, 'CONT') = r.Modulo  -- Armando
-WHERE r.Cuenta = @Cuenta AND r.empresa = @Empresa
-AND ISNULL(m.Sucursal, '') = ISNULL(ISNULL(@Sucursal, m.Sucursal), '')
-AND c.FechaContable < @FechaSaldoInicial -- Armando
-GROUP BY m.UEN
-HAVING SUM(ISNULL(r.Debe,0) - ISNULL(r.Haber,0)) <> 0
-INSERT INTO #DWH (Contacto, CtoTipo, Debe, Haber, Proyecto, UEN, FechaEmision, CentroCostos, CuentaDinero)
-SELECT
-NULL,
-NULL,
-Debe = SUM(ISNULL(r.Debe,0)),
-Haber = SUM(ISNULL(r.Haber,0)),
-NULL,
-ISNULL(m.UEN,0),
-NULL,
-NULL,
-NULL
-FROM
-Cont c
-LEFT OUTER JOIN ContReg r ON c.ID = r.ID  AND ISNULL(c.OrigenTipo, 'CONT') = r.modulo AND r.Empresa = c.Empresa
-LEFT OUTER JOIN MovReg m ON r.Modulo = m.Modulo AND r.ModuloID = m.ID AND r.Empresa = m.Empresa
-LEFT OUTER JOIN MovTipo mt ON     mt.mov = c.mov AND
-mt.modulo = 'CONT' AND
-mt.clave = 'CONT.P'
-WHERE  mt.modulo = 'CONT' AND
-mt.clave = 'CONT.P' AND
-c.Estatus = 'CONCLUIDO' AND
-isnull(c.Moneda,'') = isnull(isnull(@Moneda, c.Moneda),'') AND
-r.cuenta = @Cuenta AND r.empresa = @Empresa AND c.Ejercicio = @Ejercicio AND c.Periodo BETWEEN @PeriodoD AND @PeriodoA AND
-ISNULL(m.Sucursal, 0) = ISNULL(ISNULL(@Sucursal, m.Sucursal), 0)
-GROUP BY
-m.UEN
+	
+	IF EXISTS(SELECT 1 FROM @CtasCorregidas AS cc WHERE cc.Cuenta=@Cuenta)
+	BEGIN
+		INSERT INTO #DWHSI(Contacto, CtoTipo, Proyecto, UEN, FechaEmision, CentroCostos, CuentaDinero, Saldo)
+				SELECT
+					'',
+					'',
+					'',
+					ISNULL(m.UEN,0),
+					'',
+					'',
+					'',
+					SUM(ISNULL(r.Debe,0) - ISNULL(r.Haber,0))
+					FROM ContReg r
+					JOIN Cont c ON c.ID = r.ID 
+					--AND ISNULL(c.OrigenTipo, 'CONT') = r.Modulo  -- Armando
+					 LEFT OUTER JOIN MovReg m ON r.Modulo = m.Modulo AND r.ModuloID = m.ID AND r.Empresa = m.Empresa
+					 LEFT OUTER JOIN MovTipo mt ON     mt.mov = c.mov
+					 WHERE mt.modulo = 'CONT' AND
+					mt.clave IN ('CONT.P','CONT.C') AND
+					c.Estatus = 'CONCLUIDO' AND
+					  r.Cuenta = @Cuenta AND r.empresa = @Empresa
+					AND ISNULL(c.Sucursal, '') = ISNULL(ISNULL(@Sucursal, c.Sucursal), '')
+					AND 
+					   (
+						(c.Ejercicio < @ejercicio) 
+						OR 
+						(c.Ejercicio = @ejercicio AND c.Periodo <= (@PeriodoD - 1)) 
+						)
+					AND c.FechaContable < @FechaSaldoInicial -- Armando
+					--GROUP BY ISNULL(ISNULL(r.ContactoEspecifico, c.Contacto),''), c.ContactoTipo
+					GROUP BY m.UEN
+					HAVING SUM(ISNULL(r.Debe,0) - ISNULL(r.Haber,0)) <> 0
+				
+		INSERT INTO #DWH (Contacto, CtoTipo, Debe, Haber, Proyecto, UEN, FechaEmision, CentroCostos, CuentaDinero)
+				SELECT
+				NULL,
+				NULL,
+				Debe = SUM(ISNULL(r.Debe,0)),
+				Haber = SUM(ISNULL(r.Haber,0)),
+				NULL,
+				ISNULL(m.UEN,0),
+				NULL,
+				NULL,
+				NULL
+				FROM
+				Cont c
+				LEFT OUTER JOIN ContReg r ON c.ID = r.ID  
+				--AND ISNULL(c.OrigenTipo, 'CONT') = r.modulo 
+				AND r.Empresa = c.Empresa
+				LEFT OUTER JOIN MovReg m ON r.Modulo = m.Modulo AND r.ModuloID = m.ID AND r.Empresa = m.Empresa
+				LEFT OUTER JOIN MovTipo mt ON     mt.mov = c.mov
+				WHERE  ISNULL(mt.modulo,'CONT') = 'CONT' AND
+				mt.clave IN ('CONT.P','CONT.C') AND
+				c.Estatus = 'CONCLUIDO' AND
+				isnull(c.Moneda,'') = isnull(isnull(@Moneda, c.Moneda),'') AND
+				r.cuenta = @Cuenta AND r.empresa = @Empresa AND c.Ejercicio = @Ejercicio AND c.Periodo BETWEEN @PeriodoD AND @PeriodoA AND
+				ISNULL(c.Sucursal, 0) = ISNULL(ISNULL(@Sucursal, c.Sucursal), 0)
+				GROUP BY m.UEN
+	END 
+	ELSE
+	BEGIN
+		INSERT INTO #DWHSI(Contacto, CtoTipo, Proyecto, UEN, FechaEmision, CentroCostos, CuentaDinero, Saldo)
+		SELECT
+		'',
+		'',
+		'',
+		ISNULL(m.UEN,0),
+		'',
+		'',
+		'',
+		SUM(ISNULL(r.Debe,0) - ISNULL(r.Haber,0))
+		FROM ContReg r
+		JOIN MovReg m ON r.Modulo = m.Modulo AND r.ModuloID = m.ID AND r.Empresa = m.Empresa
+		JOIN Cont c ON c.ID = r.ID AND ISNULL(c.OrigenTipo, 'CONT') = r.Modulo  -- Armando
+		WHERE r.Cuenta = @Cuenta AND r.empresa = @Empresa
+		AND ISNULL(m.Sucursal, '') = ISNULL(ISNULL(@Sucursal, m.Sucursal), '')
+		AND c.FechaContable < @FechaSaldoInicial -- Armando
+		GROUP BY m.UEN
+		HAVING SUM(ISNULL(r.Debe,0) - ISNULL(r.Haber,0)) <> 0
+		
+		INSERT INTO #DWH (Contacto, CtoTipo, Debe, Haber, Proyecto, UEN, FechaEmision, CentroCostos, CuentaDinero)
+		SELECT
+		NULL,
+		NULL,
+		Debe = SUM(ISNULL(r.Debe,0)),
+		Haber = SUM(ISNULL(r.Haber,0)),
+		NULL,
+		ISNULL(m.UEN,0),
+		NULL,
+		NULL,
+		NULL
+		FROM
+		Cont c
+		LEFT OUTER JOIN ContReg r ON c.ID = r.ID  AND ISNULL(c.OrigenTipo, 'CONT') = r.modulo AND r.Empresa = c.Empresa
+		LEFT OUTER JOIN MovReg m ON r.Modulo = m.Modulo AND r.ModuloID = m.ID AND r.Empresa = m.Empresa
+		LEFT OUTER JOIN MovTipo mt ON     mt.mov = c.mov AND
+		mt.modulo = 'CONT' AND
+		mt.clave = 'CONT.P'
+		WHERE  mt.modulo = 'CONT' AND
+		mt.clave = 'CONT.P' AND
+		c.Estatus = 'CONCLUIDO' AND
+		isnull(c.Moneda,'') = isnull(isnull(@Moneda, c.Moneda),'') AND
+		r.cuenta = @Cuenta AND r.empresa = @Empresa AND c.Ejercicio = @Ejercicio AND c.Periodo BETWEEN @PeriodoD AND @PeriodoA AND
+		ISNULL(m.Sucursal, 0) = ISNULL(ISNULL(@Sucursal, m.Sucursal), 0)
+		GROUP BY
+		m.UEN
+	END
+	
 INSERT INTO #UEN
 SELECT DISTINCT ISNULL(UEN,0)
 FROM #DWHSI
 UNION
 SELECT DISTINCT ISNULL(UEN,0)
 FROM #DWH
+
 SELECT d.Contacto, 'Nombre' = (SELECT Nombre FROM UEN WHERE UEN = u.UEN), d.CtoTipo, d.Movimiento,
 /*'Inicio' = ISNULL(@Inicio,0), */'Saldo' = ISNULL(s.Saldo,0), 'Debe' = ISNULL(d.Debe,0), 'Haber' = ISNULL(d.Haber,0), d.Proyecto, u.UEN, d.FechaEmision, d.CentroCostos, d.CuentaDinero, 'Descripcion' = Convert(char(100), '')
 FROM #UEN u
@@ -456,7 +518,7 @@ BEGIN
 		LEFT OUTER JOIN MovReg m ON r.Modulo = m.Modulo AND r.ModuloID = m.ID AND r.Empresa = m.Empresa
 		LEFT OUTER JOIN MovTipo mt ON     mt.mov = c.mov
 		WHERE mt.modulo = 'CONT' AND
-		mt.clave = 'CONT.P' AND
+		mt.clave IN ('CONT.P','CONT.C') AND
 		c.Estatus = 'CONCLUIDO' AND
 		 r.Cuenta = @Cuenta AND r.empresa = @Empresa
 		AND ISNULL(c.Sucursal, '') = ISNULL(ISNULL(@Sucursal, c.Sucursal), '')
@@ -488,7 +550,7 @@ BEGIN
 		LEFT OUTER JOIN MovReg m ON r.Modulo = m.Modulo AND r.ModuloID = m.ID AND r.Empresa = m.Empresa
 		LEFT OUTER JOIN MovTipo mt ON     mt.mov = c.mov
 		WHERE  ISNULL(mt.modulo,'CONT') = 'CONT' AND
-		mt.clave = 'CONT.P' AND
+		mt.clave IN ('CONT.P','CONT.C') AND
 		c.Estatus = 'CONCLUIDO' AND
 		isnull(c.Moneda,'') = isnull(isnull(@Moneda, c.Moneda),'') AND
 		r.cuenta = @Cuenta AND r.empresa = @Empresa AND c.Ejercicio = @Ejercicio AND c.Periodo BETWEEN @PeriodoD AND @PeriodoA AND
@@ -533,7 +595,7 @@ BEGIN
 		LEFT OUTER JOIN MovReg m ON r.Modulo = m.Modulo AND r.ModuloID = m.ID AND r.Empresa = m.Empresa
 		LEFT OUTER JOIN MovTipo mt ON mt.mov = c.mov AND mt.modulo = 'CONT' AND mt.clave = 'CONT.P'
 		WHERE mt.modulo = 'CONT' AND
-		mt.clave = 'CONT.P' AND
+		mt.clave IN ('CONT.P','CONT.C') AND
 		c.Estatus = 'CONCLUIDO' AND
 		isnull(c.Moneda,'') = isnull(isnull(@Moneda, c.Moneda),'') AND
 		r.cuenta = @Cuenta AND r.empresa = @Empresa AND c.Ejercicio = @Ejercicio AND c.Periodo BETWEEN @PeriodoD AND @PeriodoA AND
@@ -605,6 +667,7 @@ SELECT DISTINCT ISNULL(CuentaDinero,'')
 FROM #DWH
 SELECT d.Contacto, 'Nombre' = Convert(char(100), ''), d.CtoTipo, d.Movimiento,
 /*'Inicio' = ISNULL(@Inicio,0), */'Saldo' = ISNULL(s.Saldo,0), 'Debe' = ISNULL(d.Debe,0), 'Haber' = ISNULL(d.Haber,0), d.Proyecto, d.UEN, d.FechaEmision, d.CentroCostos,  c.CuentaDinero, 'Descripcion' = (SELECT Descripcion FROM CtaDinero WHERE CtaDinero =
+
  c.CuentaDinero)
 FROM #CtaDin c
 LEFT OUTER JOIN #DWHSI s ON c.CuentaDinero = s.CuentaDinero
@@ -612,4 +675,4 @@ LEFT OUTER JOIN #DWH d ON c.CuentaDinero = d.CuentaDinero
 ORDER BY c.CuentaDinero
 END
 END
-GO
+

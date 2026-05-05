@@ -1,17 +1,16 @@
-SET DATEFIRST 7
+ÔªøSET DATEFIRST 7
 SET ANSI_NULLS OFF
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED
 SET LOCK_TIMEOUT -1
 SET QUOTED_IDENTIFIER OFF
 
 go
---EXEC spDICODesgloseContactoSI '1656','210-100-000','02',NULL,2026,1,13,NULL,999,1
---SELECT * FROM DICODesgloseContactoSI WHERE Estacion=1
+
 ---PROCEDURE----
 /**************** spDICODesgloseContactoSI ****************/
-if exists (select * from sysobjects where id = object_id('dbo.spDICODesgloseContactoSI') and type = 'P') drop procedure dbo.spDICODesgloseContactoSI
+if exists (select * from sysobjects where id = object_id('spDICODesgloseContactoSI') and type = 'P') drop procedure spDICODesgloseContactoSI
 GO
-CREATE PROCEDURE [dbo].[spDICODesgloseContactoSI]  
+CREATE PROCEDURE spDICODesgloseContactoSI 
 @Filtro   VARCHAR(20),  
 @Cuenta   CHAR(15),  
 @Empresa  CHAR(5),  
@@ -25,7 +24,7 @@ CREATE PROCEDURE [dbo].[spDICODesgloseContactoSI]
 AS  
 BEGIN  
   
---GON/JDLS 16/04/2024 - para homologar y evitar casos donde el Ejercicio o Periodo est· en blanco, se filtra por la FechaContable  
+--GON/JDLS 16/04/2024 - para homologar y evitar casos donde el Ejercicio o Periodo est√° en blanco, se filtra por la FechaContable  
 DECLARE @FechaI datetime  
   
 --Se arman las Fechas Inicial y Final a partir de los parametros de Ejercicio y Periodo Inicial y Final del filtro  
@@ -37,7 +36,7 @@ DELETE FROM  DICODesgloseContactoSI WHERE Estacion=@SPID
   
 IF @Debug=1  
 SELECT @FechaI
---GON/JDLS 16/04/2024 - para homologar y evitar casos donde el Ejercicio o Periodo est· en blanco, se filtra por la FechaContable  
+--GON/JDLS 16/04/2024 - para homologar y evitar casos donde el Ejercicio o Periodo est√° en blanco, se filtra por la FechaContable  
   
 /******IGGR********/  
 --Se agregan tablas tipo tabla para insertar los consecutivos de las polizas para el saldo inicial y para las polizas del mes  
@@ -114,6 +113,7 @@ SELECT DISTINCT Cuenta FROM DICOCtasActualizar
 					AND ISNULL(m.Sucursal, '') = ISNULL(ISNULL(@Sucursal, m.Sucursal), '')
 					AND ISNULL(ISNULL(r.ContactoEspecifico, c.Contacto),'')=@Filtro
 					AND c.FechaContable < @FechaI -- Armando  
+
 IF @Debug=1  
  SELECT '@ContTSI',* FROM @ContTSI  
   
@@ -139,12 +139,10 @@ END
 --SELECt * FROM MovTipo where modulo='CONT'  
   
 INSERT INTO DICODesgloseContactoSI  
-SELECT @spid,c.ID,@Empresa,c.Contacto,ISNULL(c.ContactoTipo,''),c.Cuenta,@Sucursal,ISNULL(c.Debe,0),ISNULL(c.Haber,0)  
- FROM @ContTSI c  
- --JOIN ContReg r ON c.ID=r.ID AND c.Cuenta=r.Cuenta AND c.Empresa=r.Empresa  
+	SELECT @spid,c.ID,@Empresa,c.Contacto,ISNULL(c.ContactoTipo,''),c.Cuenta,@Sucursal,ISNULL(c.Debe,0),ISNULL(c.Haber,0)  
+	  FROM @ContTSI c  
+    --JOIN ContReg r ON c.ID=r.ID AND c.Cuenta=r.Cuenta AND c.Empresa=r.Empresa  
   
 END  
 
 GO
-
-

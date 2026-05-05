@@ -72,9 +72,18 @@ SELECT @FechaEmision 	= @ValorFechaEmision
 SELECT @CC		= @ValorCC
 SELECT @CuentaDinero  = @ValorCuentaDinero
 
+--IGGR. Tabla que almacenara las cuentas corregidas
+DECLARE @CtasCorregidas TABLE(
+	Cuenta		VARCHAR(35)	
+)
+INSERT INTO @CtasCorregidas
+SELECT DISTINCT Cuenta FROM DICOCtasActualizar
 
 
 IF @Filtro = 'Contacto'
+BEGIN
+
+IF EXISTS(SELECT 1 FROM @CtasCorregidas AS cc WHERE cc.Cuenta=@Cuenta)
 BEGIN
 INSERT INTO DesgloseDWH
 SELECT m.ID,
@@ -115,7 +124,47 @@ isnull(c.Moneda,'') = isnull(isnull(@Moneda, c.Moneda),'') AND
 r.cuenta = @Cuenta AND r.empresa = @Empresa AND c.Ejercicio = @Ejercicio AND c.Periodo BETWEEN @PeriodoD AND @PeriodoA AND
 ISNULL(c.Sucursal, 0) = ISNULL(ISNULL(@Sucursal, c.Sucursal), 0)
 AND ISNULL(ISNULL(r.ContactoEspecifico, c.Contacto),'')=@Contacto
-
+END
+ELSE
+BEGIN
+INSERT INTO DesgloseDWH
+SELECT m.ID,
+e.Empresa,
+e.Nombre,
+s.Sucursal,
+s.Nombre,
+m.Moneda,
+ISNULL(ISNULL(r.ContactoEspecifico, c.Contacto),''),
+m.FechaEmision,
+ISNULL(m.Proyecto,''),
+ISNULL(m.UEN,''),
+ISNULL(r.SubCuenta,''),
+ISNULL(m.CtaDinero,''),
+m.Modulo,
+c.ID,
+c.Mov,
+c.movID,
+c.Referencia,
+c.Observaciones,
+ISNULL(c.Origen,''),
+ISNULL(c.OrigenID,''),
+ISNULL(r.Debe,0),
+ISNULL(r.Haber,0),
+@Spid 
+FROM Cont c
+left JOIN ContReg r ON c.ID = r.ID AND ISNULL(c.OrigenTipo, 'CONT') = r.Modulo AND r.Empresa = c.Empresa
+left JOIN MovReg m ON r.Modulo = m.Modulo AND r.ModuloID = m.ID AND r.Empresa = m.Empresa AND r.Empresa = c.Empresa
+AND ISNULL(c.Origen, c.Mov) = m.Mov AND ISNULL(c.OrigenID, c.MovID) = m.MovID AND ISNULL(c.OrigenTipo, 'CONT') = m.Modulo
+AND c.Sucursal = m.Sucursal --AND c.Ejercicio = m.Ejercicio AND c.Periodo = m.Periodo -- Armando
+JOIN Empresa e ON e.Empresa = c.Empresa
+left JOIN Sucursal s ON s.Sucursal = c.Sucursal
+WHERE c.Estatus = 'CONCLUIDO'
+AND ISNULL(ISNULL(r.ContactoEspecifico, m.Contacto),'') = ISNULL(ISNULL(@Contacto, ISNULL(r.ContactoEspecifico, m.Contacto)), '') /*IGGR 20/11/2024*/
+--AND ISNULL(m.CtoTipo,'') = ISNULL(@TipoCto,'') /*GON 23/08/2013*/
+AND ISNULL(ISNULL(c.ContactoTipo,m.CtoTipo),'') = ISNULL(@TipoCto,'')  /*IGGR 20/11/2024*/
+AND r.cuenta = @Cuenta AND c.empresa = @Empresa AND c.Ejercicio = @Ejercicio AND c.Periodo BETWEEN @PeriodoD AND @PeriodoA -- Armando
+AND ISNULL(m.Sucursal, 0) = ISNULL(ISNULL(@Sucursal, m.Sucursal), 0)
+END
 
 SELECT * FROM DesgloseDWH  where SpidSQL  = @Spid
 END

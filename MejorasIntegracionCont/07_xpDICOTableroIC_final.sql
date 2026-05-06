@@ -113,7 +113,7 @@ FROM  ContReg AS cr
 WHERE cr.Empresa=@Empresa
 AND (ISNULL(@Cuenta,'')='' OR cr.Cuenta=@Cuenta)
 AND NOT EXISTS(SELECT 1 FROM ContD cd WHERE cr.ID=cd.ID AND cr.Cuenta=cd.Cuenta AND (ISNULL(@Cuenta,'')='' OR cr.Cuenta=@Cuenta))
-GROUP BY cr.ID, cr.Empresa,cr.Sucursal,cr.Modulo,cr.ModuloIDUNION ALL
+GROUP BY cr.ID, cr.Empresa,cr.Sucursal,cr.Modulo,cr.ModuloID UNION ALL
 --Extrae Polizas que existen en Cont pero no en ContReg
 SELECT @Estacion,ct.ID, ct.Empresa,ct.Sucursal,ct.FechaEmision,ct.FechaContable,ct.Estatus,ct.Modulo,ct.OrigenID
     ,0 AS 'DebeContReg'

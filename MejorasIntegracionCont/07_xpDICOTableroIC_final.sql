@@ -87,7 +87,9 @@ WHERE cr.Empresa=@Empresa
 AND (ISNULL(@Cuenta,'')='' OR cr.Cuenta=@Cuenta)
 GROUP BY cr.ID, cr.Empresa,cr.Sucursal,ct.Debe,ct.Haber,ct.FechaEmision,ct.FechaContable,ct.Estatus,ct.OrigenID,ct.Modulo,ct.Contacto
 HAVING (ABS(ROUND(ct.Debe-SUM(ISNULL(cr.Debe,0)),2))<>0 OR ABS(ROUND(ct.Haber-SUM(ISNULL(cr.Haber,0)),2))<>0)
+
 UNION ALL
+
 --Extrae Polizas que existen en Cont pero no en ContReg
 SELECT @Estacion,ct.ID, ct.Empresa,ct.Sucursal,ct.FechaEmision,ct.FechaContable,ct.Estatus,ct.Modulo,ct.OrigenID
     ,0 AS 'DebeContReg'
@@ -113,7 +115,9 @@ FROM  ContReg AS cr
 WHERE cr.Empresa=@Empresa
 AND (ISNULL(@Cuenta,'')='' OR cr.Cuenta=@Cuenta)
 AND NOT EXISTS(SELECT 1 FROM ContD cd WHERE cr.ID=cd.ID AND cr.Cuenta=cd.Cuenta AND (ISNULL(@Cuenta,'')='' OR cr.Cuenta=@Cuenta))
-GROUP BY cr.ID, cr.Empresa,cr.Sucursal,cr.Modulo,cr.ModuloID UNION ALL
+GROUP BY cr.ID, cr.Empresa,cr.Sucursal,cr.Modulo,cr.ModuloID 
+UNION ALL
+
 --Extrae Polizas que existen en Cont pero no en ContReg
 SELECT @Estacion,ct.ID, ct.Empresa,ct.Sucursal,ct.FechaEmision,ct.FechaContable,ct.Estatus,ct.Modulo,ct.OrigenID
     ,0 AS 'DebeContReg'
@@ -126,7 +130,9 @@ SELECT @Estacion,ct.ID, ct.Empresa,ct.Sucursal,ct.FechaEmision,ct.FechaContable,
 FROM #ContT_tbl ct 
 WHERE ct.Empresa=@Empresa
 AND NOT EXISTS(SELECT 1 FROM ContReg c WITH(NOLOCK) WHERE c.ID=ct.ID AND (ISNULL(@Cuenta,'')='' OR c.Cuenta=@Cuenta))
+
 UNION ALL
+
 --Extrae polizas cuyas cuentas no existan en ContReg y si en ContD
 SELECT @Estacion,cr.ID, cr.Empresa,cr.Sucursal,NULL,NULL,NULL,cr.Modulo,CAST(cr.ModuloID AS VARCHAR(30))
     ,SUM(ISNULL(cr.Debe,0)) AS 'DebeContReg'
@@ -141,7 +147,9 @@ WHERE cr.Empresa=@Empresa
 AND (ISNULL(@Cuenta,'')='' OR cr.Cuenta=@Cuenta)
 AND NOT EXISTS(SELECT 1 FROM ContD cd WITH(NOLOCK) WHERE cr.ID=cd.ID AND cr.Cuenta=cd.Cuenta AND (ISNULL(@Cuenta,'')='' OR cr.Cuenta=@Cuenta))
 GROUP BY cr.ID, cr.Empresa,cr.Sucursal,cr.Modulo,cr.ModuloID
+
 UNION ALL
+
 --Este caso muestra polizas cuyo modulo no sea igual entre la poliza y contreg
 SELECT DISTINCT @Estacion, ct.ID, ct.Empresa, ct.Sucursal, ct.FechaEmision, ct.FechaContable, ct.Estatus,ct.Modulo,ct.OrigenID
        ,SUM(ISNULL(cr.Debe,0)) AS 'DebeContReg'
@@ -155,7 +163,9 @@ FROM #ContT_tbl ct
 JOIN ContReg AS cr WITH(NOLOCK) ON cr.ID = ct.ID AND cr.Empresa = ct.Empresa AND cr.Sucursal = ct.Sucursal
 WHERE ct.Modulo<>cr.Modulo
 GROUP BY ct.ID, ct.Empresa, ct.Sucursal, ct.FechaEmision, ct.FechaContable, ct.Estatus,ct.Modulo,ct.OrigenID,ct.Debe,ct.Haber
+
 UNION ALL
+
 --Este caso muestra polizas cuyas empresas sean incorretas entre cont y contreg
 SELECT DISTINCT @Estacion, ct.ID, ct.Empresa, ct.Sucursal, ct.FechaEmision, ct.FechaContable, ct.Estatus,ct.Modulo,ct.OrigenID
        ,SUM(ISNULL(cr.Debe,0)) AS 'DebeContReg'

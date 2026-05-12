@@ -17,4 +17,5 @@ Se realiza lo siguiente:
 -Se actulizan las cabeceras de los scripts 02 y 18 de la carpeta de MejorasItegracionCont
 -Se agrega el procedimiento spDWHVerDesgloseContactoSR para mostrar todos los movimientos que componen el total presentado en la pantalla principal del desglose por contacto
 -Se actualiza el AddOn DICO41.1 modifica la forma DWHExplorarAcum para ejecutar de forma a decuada el procedimiento que devuelve el saldo inicial
-
+***************Actualizacion al 12/05/2026**************************
+-Se actualiza la numeración de los scripts de la carpeta de Mejora de Integración contable ya que se repitio el script spDicoRegenerarRegistroContable en el listado
